@@ -1,0 +1,77 @@
+[3]Mosin-Nagant M1891
+[3]Mosin-Nagant M1891 Bayonet
+[3]Mosin-Nagant M1891 Avtomat
+[3]Lebel 1886
+[3]Lebel 1886 Talon
+[3]Berthier Mle 1892
+[3]Berthier Mle 1892 Marksman
+[3]Krag-Jørgensen
+[3]Krag-Jørgensen Sniper
+[3]Marlin Model 1893 Carbine
+[3]Sparks LRR
+[3]Sparks LRR Sniper
+[3]Martini-Henry IC1
+[3]Martini-Henry IC1 Riposte
+[3]Springfield 1866
+[3]Springfield 1866 Marksman
+[3]Winfield Centennial
+[3]Winfield Centennial Sniper
+[3]Vetterli 71 Karabiner
+[3]Vetterli 71 Karabiner Bayonet
+[3]Vetterli 71 Karabiner Silencer
+[3]Winfield M1873
+[3]Winfield M1873 Talon
+[3]Winfield M1873 Swift
+[3]Winfield M1873C
+[3]Winfield M1873C Silencer
+[3]Crown & King Auto-5
+[3]Specter 1882
+[3]Specter 1882 Bayonet
+[3]Winfield 1893 Slate
+[3]Terminus m1887
+[3]Romero 77
+[3]Romero 77 Talon
+[3]Bomb Lance
+[3]Crossbow
+[2]Hunting Bow
+[2]Dolch 96 Precision
+[2]Bornheim No.3 Match
+[2]Scottfield Model 3 Precision
+[2]Springfield 1866 Compact
+[2]Springfield 1866 Compact Striker
+[2]Winfield M1873C Vandal
+[2]Winfield M1873C Vandal Striker
+[2]Vetterli 71 Karabiner Cyclone
+[2]Romero 77 Handcannon
+[2]Romero 77 Hatchet
+[2]Caldwell Rival 78 Handcannon
+[2]Specter 1882 Compact
+[2]Winfield Centennial Shorty
+[2]Winfield Centennial Shorty Silencer
+[2]Terminus m1887 Handcannon
+[2]Mosin-Nagant M1891 Obrez
+[2]Mosin-Nagant M1891 Obrez Mace
+[1]Caldwell Conversion Pistol [Dual]
+[1]Caldwell Conversion Chain Pistol [Dual]
+[1]Caldwell Conversion Uppercut [Dual]
+[1]Caldwell Conversion Uppercut Precision
+[1]Caldwell Pax [Dual]
+[1]Caldwell Pax Claw [Dual]
+[1]Caldwell 92 New Army [Dual]
+[1]Scottfield Model 3 [Dual]
+[1]Scottfield Model 3 Spitfire [Dual]
+[1]Scottfield Model 3 Brawler [Dual]
+[1]Dolch 96 [Dual]
+[1]Bornheim No.3 [Dual]
+[1]Bornheim No.3 Extended [Dual]
+[1]LeMat Mark II [Dual]
+[1]Nagant M1895 [Dual]
+[1]Nagant M1895 Silencer [Dual]
+[1]Nagant M1895 Officer [Dual]
+[1]Nagant M1895 Officer Brawler [Dual]
+[1]Sparks Pistol [Dual]
+[1]Cavalry Saber
+[1]Machete
+[1]Heavy Knife
+[1]Baseball Bat
+[1]Railroad Spike

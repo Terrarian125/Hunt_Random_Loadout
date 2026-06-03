@@ -3,6 +3,11 @@ import random
 import tkinter as tk
 from tkinter import messagebox
 
+# --- 🎥 GIFアニメーション制御用の変数 ---
+gif_frames = []
+gif_index = 0
+is_playing = False  # 現在アニメーション中かどうかを管理するフラグ
+
 
 def load_weapons(filename):
     """ファイルから武器データを読み込む関数"""
@@ -30,7 +35,6 @@ def load_weapons(filename):
                     clean_name = line.replace(" [Dual]", "")
                     dual_name = clean_name.replace("[1]", "[2]二丁拳銃: ")
                     weapons.append({"name": dual_name, "size": 2})
-
     except FileNotFoundError:
         pass
     return weapons
@@ -68,10 +72,31 @@ def select_weapons(weapons, max_slots):
     return [w1["name"], w2["name"]]
 
 
-def generate_text():
-    """ロードアウトを生成して画面に表示する"""
-    result = []
+def update_gif():
+    """GIFアニメをパラパラ動かす関数"""
+    global gif_index, is_playing
+    if gif_frames and is_playing:
+        gif_index = (gif_index + 1) % len(gif_frames)
+        image_label.config(image=gif_frames[gif_index])
+        # 100ミリ秒（0.1秒）ごとに次のコマへ
+        root.after(100, update_gif)
 
+
+def stop_gif():
+    """アニメーションを停止して、最初のコマ（静止画）に戻す関数"""
+    global gif_index, is_playing
+    is_playing = False
+    gif_index = 0
+    if gif_frames:
+        image_label.config(image=gif_frames[0])
+
+
+def generate_text():
+    """ロードアウトを生成して画面に表示する（ボタンを押したときの処理）"""
+    global is_playing
+
+    # 1. まず装備をランダム生成して表示
+    result = []
     max_slots = 5 if qm_var.get() else 4
     weapons_list = load_weapons("Data/weapons.txt")
 
@@ -106,6 +131,13 @@ def generate_text():
     text_area.insert(tk.END, "\n".join(result))
     text_area.config(state=tk.DISABLED)
 
+    # 2. ★ 同時にGIFアニメーションを再生開始する
+    if gif_frames and not is_playing:
+        is_playing = True
+        update_gif()
+        # 1000ミリ秒（1秒）後に自動で止めるタイマーをセット
+        root.after(1000, stop_gif)
+
 
 def show_welcome_message():
     """起動時に表示する案内テキスト"""
@@ -125,7 +157,7 @@ def show_welcome_message():
 # --- 画面（GUI）の作成 ---
 root = tk.Tk()
 root.title("Hunt: Showdown ロードアウト抽選")
-root.geometry("480x580")
+root.geometry("480x600")
 
 # クォーターマスターのチェックボックス
 qm_var = tk.BooleanVar()
@@ -138,10 +170,13 @@ qm_check = tk.Checkbutton(
 )
 qm_check.pack()
 
+# メイン表示エリア
+main_frame = tk.Frame(root)
+main_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=5)
+
 # 結果を表示するテキストエリア
-text_area = tk.Text(root, wrap=tk.WORD, font=("MS Gothic", 12))
-text_area.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-text_area.config(state=tk.DISABLED)
+text_area = tk.Text(main_frame, wrap=tk.WORD, font=("MS Gothic", 12))
+text_area.pack(expand=True, fill=tk.BOTH)
 
 # 再試行ボタン
 retry_button = tk.Button(
@@ -154,7 +189,26 @@ retry_button = tk.Button(
 )
 retry_button.pack(fill=tk.X, padx=10, pady=10)
 
-# 起動時は案内メッセージを表示する
+# GIFアニメーション画像の読み込み処理
+gif_path = "Data/character.gif"
+if os.path.exists(gif_path):
+    try:
+        idx = 0
+        while True:
+            frame = tk.PhotoImage(file=gif_path, format=f"gif -index {idx}")
+            gif_frames.append(frame)
+            idx += 1
+    except tk.TclError:
+        pass
+
+# 画像を表示するラベル（オレンジの部分に固定配置）
+if gif_frames:
+    image_label = tk.Label(root, bd=0, highlightthickness=0)
+    image_label.place(relx=1.0, rely=1.0, anchor="se", x=-25, y=-80)
+    # 最初は最初のコマ（静止状態）を表示しておく
+    image_label.config(image=gif_frames[0])
+
+# 起動時のセットアップ
 show_welcome_message()
 
 root.mainloop()

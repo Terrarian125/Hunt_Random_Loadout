@@ -1,8 +1,10 @@
+import glob
 import os
 import random
 import re
 import tkinter as tk
 from tkinter import messagebox
+from PIL import Image, ImageTk  # ★ Pillowを使用
 
 # --- 🎥 GIFアニメーション制御用のグローバル変数 ---
 gif_frames = []
@@ -12,22 +14,17 @@ is_playing = False
 
 def parse_ammo(line):
     """武器の行から（[数]弾薬）の部分をすべて解析して、ランダムに選ぶ関数（複数スロット対応）"""
-    # 行の中にある「（中身）」をすべて抽出
     matches = list(re.finditer(r"（(.*?)）", line))
 
     if not matches:
-        return line, ""  # カッコがなければそのまま武器名を返す
+        return line, ""
 
-    # 最初のカッコが始まる前までを綺麗な武器名とする
     clean_name = line[: matches[0].start()].strip()
-
     all_ammo_texts = []
 
-    # 見つかったカッコの数だけループ処理（ルマット等の複数スロットに対応）
     for match in matches:
         ammo_content = match.group(1)
 
-        # 何個選ぶか（[1] や [2]）を判定
         count = 1
         count_match = re.search(r"\[([12])\]", ammo_content)
         if count_match:
@@ -36,7 +33,6 @@ def parse_ammo(line):
         else:
             ammo_options_str = ammo_content
 
-        # 「｜」で区切ってリスト化
         ammo_options = [
             a.strip() for a in ammo_options_str.split("｜") if a.strip()
         ]
@@ -44,20 +40,16 @@ def parse_ammo(line):
         if not ammo_options:
             continue
 
-        # 二丁拳銃（Dual）の場合は、ゲームの仕様上強制的に1種類制限にする
         if "二丁拳銃:" in clean_name and count > 1:
             count = 1
 
         if len(ammo_options) < count:
             count = len(ammo_options)
 
-        # ランダムに重複なく抽出
         selected_ammo = random.sample(ammo_options, count)
         all_ammo_texts.append("/".join(selected_ammo))
 
-    # 2つ以上のスロットがある場合は「 ＋ 」で繋ぐ (例: FMJ弾 ＋ スラッグ弾)
     final_ammo_text = " ＋ ".join(all_ammo_texts)
-
     return clean_name, f" ({final_ammo_text})"
 
 
@@ -81,10 +73,8 @@ def load_weapons(filename):
                 else:
                     line = f"[1]{line}"
 
-                # 弾薬解析前の「元の行」を保持して登録
                 weapons.append({"raw_line": line, "size": size})
 
-                # [Dual]の記載があれば、2スロットの二丁拳銃バージョンも候補に自動追加
                 if "[Dual]" in line:
                     dual_line = line.replace(" [Dual]", "")
                     dual_line = dual_line.replace("[1]", "[2]二丁拳銃: ")
@@ -124,7 +114,6 @@ def select_weapons(weapons, max_slots):
 
     w2 = random.choice(available_w2)
 
-    # 選ばれた武器の弾薬をここで初めて確定させる
     w1_name, w1_ammo = parse_ammo(w1["raw_line"])
     w2_name, w2_ammo = parse_ammo(w2["raw_line"])
 
@@ -132,26 +121,51 @@ def select_weapons(weapons, max_slots):
 
 
 def update_gif():
-    """GIFアニメをパラパラ動かす関数"""
+    """GIFアニメを1回だけ最後まで再生し、最後のコマで止まる関数"""
     global gif_index, is_playing
     if gif_frames and is_playing:
-        gif_index = (gif_index + 1) % len(gif_frames)
-        image_label.config(image=gif_frames[gif_index])
-        root.after(100, update_gif)  # 100msごとにコマ送り
+        if gif_index < len(gif_frames):
+            image_label.config(image=gif_frames[gif_index])
+            gif_index += 1
+            root.after(30, update_gif) #再生速度
+        else:
+            is_playing = False
 
 
-def stop_gif():
-    """アニメーションを停止して静止状態（最初のコマ）に戻す関数"""
-    global gif_index, is_playing
-    is_playing = False
-    gif_index = 0
-    if gif_frames:
-        image_label.config(image=gif_frames[0])
+def load_random_gif():
+    """Data/Image フォルダ内のGIFからランダムに1つ選んでフレームを読み込む"""
+    global gif_frames
+    gif_frames = []  # 前回のフレームをクリア
+
+    image_dir = "Data/Image"
+    if not os.path.exists(image_dir):
+        return
+
+    # フォルダ内のすべての .gif ファイルを取得
+    gif_files = glob.glob(os.path.join(image_dir, "*.gif"))
+    if not gif_files:
+        return
+
+    # ランダムに1つ選択
+    chosen_gif = random.choice(gif_files)
+
+    try:
+        img = Image.open(chosen_gif)
+        try:
+            while True:
+                frame_img = img.convert("RGBA")
+                resized_img = frame_img.resize((220, 220), Image.Resampling.LANCZOS)
+                gif_frames.append(ImageTk.PhotoImage(resized_img))
+                img.seek(img.tell() + 1)
+        except EOFError:
+            pass
+    except Exception as e:
+        print(f"GIF読み込みエラー ({chosen_gif}): {e}")
 
 
 def generate_text():
     """ロードアウトを生成して画面に表示する"""
-    global is_playing
+    global is_playing, gif_index
     result = []
 
     max_slots = 5 if qm_var.get() else 4
@@ -165,23 +179,19 @@ def generate_text():
     else:
         primary, secondary = select_weapons(weapons_list, max_slots)
 
-    # 1. メイン武器
     result.append("＝＝１から（メイン武器）＝＝")
     result.append(primary)
     result.append("")
 
-    # 2. サブ武器
     result.append("＝＝２から（サブ武器）＝＝")
     result.append(secondary)
     result.append("")
 
-    # 3. ツール
     result.append("＝＝３から（ツール）＝＝")
     result.append("救急キット")
     result.extend(get_random_lines("Data/03_Tool.txt", 3))
     result.append("")
 
-    # 4. 消耗品（重複あり）
     result.append("＝＝４から（消耗品）＝＝")
     result.extend(
         get_random_lines("Data/04_Consumable.txt", 4, allow_duplicates=True)
@@ -193,11 +203,14 @@ def generate_text():
     text_area.insert(tk.END, "\n".join(result))
     text_area.config(state=tk.DISABLED)
 
-    # ★ 同時にGIFアニメーションを1秒間だけ再生開始する
-    if gif_frames and not is_playing:
+    # ★ 生成ボタンが押されたタイミングで新しくランダムにGIFを読み込む
+    load_random_gif()
+
+    # GIFアニメーションを最初から再生
+    if gif_frames:
         is_playing = True
+        gif_index = 0
         update_gif()
-        root.after(1000, stop_gif)  # 1000ms（1秒）後に自動停止
 
 
 def show_welcome_message():
@@ -218,9 +231,8 @@ def show_welcome_message():
 # --- 画面（GUI）の作成 ---
 root = tk.Tk()
 root.title("Hunt: Showdown ロードアウト抽選")
-root.geometry("520x620")  # 弾薬文字の回り込み防止のため少し広めのサイズ
+root.geometry("520x620")
 
-# クォーターマスターのチェックボックス
 qm_var = tk.BooleanVar()
 qm_check = tk.Checkbutton(
     root,
@@ -231,15 +243,12 @@ qm_check = tk.Checkbutton(
 )
 qm_check.pack()
 
-# メイン表示エリア
 main_frame = tk.Frame(root)
 main_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=5)
 
-# 結果を表示するテキストエリア
 text_area = tk.Text(main_frame, wrap=tk.WORD, font=("MS Gothic", 12))
 text_area.pack(expand=True, fill=tk.BOTH)
 
-# 再試行ボタン
 retry_button = tk.Button(
     root,
     text="ロードアウトを生成 / 再試行 (Generate / Retry)",
@@ -250,26 +259,15 @@ retry_button = tk.Button(
 )
 retry_button.pack(fill=tk.X, padx=10, pady=10)
 
-# GIFアニメーション画像の読み込み処理
-gif_path = "Data/character.gif"
-if os.path.exists(gif_path):
-    try:
-        idx = 0
-        while True:
-            frame = tk.PhotoImage(file=gif_path, format=f"gif -index {idx}")
-            gif_frames.append(frame)
-            idx += 1
-    except tk.TclError:
-        pass
 
-# 画像を表示するラベル（オレンジ部分・ボタンのすぐ上に絶対配置）
+# ★ 初期状態として、まずは1個ランダムに選んで最初のコマを表示しておく
+load_random_gif()
+
+# 画像を表示するラベル（右下に絶対配置固定 ＆ 背景同化）
 if gif_frames:
-    image_label = tk.Label(root, bd=0, highlightthickness=0)
+    image_label = tk.Label(root, bd=0, highlightthickness=0, bg=text_area["bg"])
     image_label.place(relx=1.0, rely=1.0, anchor="se", x=-25, y=-80)
-    # 最初は静止状態（最初のコマ）で待機
     image_label.config(image=gif_frames[0])
 
-# 起動時の案内メッセージをセットアップ
 show_welcome_message()
-
 root.mainloop()

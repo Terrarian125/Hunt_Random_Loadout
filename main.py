@@ -4,7 +4,7 @@ import random
 import re
 import tkinter as tk
 from tkinter import messagebox
-from PIL import Image, ImageTk  # ★ Pillowを使用
+from PIL import Image, ImageTk
 
 # --- 🎥 GIFアニメーション制御用のグローバル変数 ---
 gif_frames = []
@@ -13,7 +13,7 @@ is_playing = False
 
 
 def parse_ammo(line):
-    """武器の行から（[数]弾薬）の部分をすべて解析して、ランダムに選ぶ関数（複数スロット対応）"""
+    """武器の行から（[数]弾薬）や（[数]近接）の部分をすべて解析して、ランダムに選ぶ関数"""
     matches = list(re.finditer(r"（(.*?)）", line))
 
     if not matches:
@@ -24,6 +24,11 @@ def parse_ammo(line):
 
     for match in matches:
         ammo_content = match.group(1)
+
+        # 「近接」などの特殊タグの場合は、そのままカッコ付きで残す
+        if "近接" in ammo_content:
+            all_ammo_texts.append(ammo_content)
+            continue
 
         count = 1
         count_match = re.search(r"\[([12])\]", ammo_content)
@@ -50,11 +55,11 @@ def parse_ammo(line):
         all_ammo_texts.append("/".join(selected_ammo))
 
     final_ammo_text = " ＋ ".join(all_ammo_texts)
-    return clean_name, f" ({final_ammo_text})"
+    return clean_name, f" （{final_ammo_text}）"
 
 
 def load_weapons(filename):
-    """ファイルから武器データを読み込む関数"""
+    """ファイルから武器データを読み込む関数（サイズ1〜5に対応）"""
     weapons = []
     try:
         with open(filename, "r", encoding="utf-8") as f:
@@ -64,12 +69,9 @@ def load_weapons(filename):
                     continue
 
                 size = 1
-                if line.startswith("[1]"):
-                    size = 1
-                elif line.startswith("[2]"):
-                    size = 2
-                elif line.startswith("[3]"):
-                    size = 3
+                size_match = re.match(r"^\[([1-5])\]", line)
+                if size_match:
+                    size = int(size_match.group(1))
                 else:
                     line = f"[1]{line}"
 
@@ -77,47 +79,66 @@ def load_weapons(filename):
 
                 if "[Dual]" in line:
                     dual_line = line.replace(" [Dual]", "")
-                    dual_line = dual_line.replace("[1]", "[2]二丁拳銃: ")
+                    dual_line = re.sub(r"^\[[1-5]\]", "[2]二丁拳銃: ", dual_line)
+                    # 二丁拳銃化しても近接タグが残るように末尾に（近接）を補正
+                    if "近接" in line and not dual_line.endswith("（近接）"):
+                        dual_line += "（近接）"
                     weapons.append({"raw_line": dual_line, "size": 2})
     except FileNotFoundError:
         pass
     return weapons
 
 
-def get_random_lines(filename, count, allow_duplicates=False):
-    """ツール・消耗品用の汎用読み込み関数"""
+def get_integrated_items(tool_file, consumable_file, count, exclude_medkit=False):
+    """ツールと消耗品ファイルを統合し、ランダムに指定個数抽出する（重複あり）"""
+    combined_items = []
+
+    # ツールファイルの読み込み
     try:
-        with open(filename, "r", encoding="utf-8") as f:
-            lines = [line.strip() for line in f if line.strip()]
-        if not lines:
-            return ["（ファイルが空です）"]
-        if allow_duplicates:
-            return random.choices(lines, k=count)
-        if len(lines) < count:
-            return random.choices(lines, k=count)
-        return random.sample(lines, count)
+        with open(tool_file, "r", encoding="utf-8") as f:
+            for line in f:
+                item = line.strip()
+                if item:
+                    if exclude_medkit and "救急キット" in item:
+                        continue
+                    combined_items.append(item)
     except FileNotFoundError:
-        return [f"（{filename} が見つかりません）"]
+        pass
+
+    # 消耗品ファイルの読み込み
+    try:
+        with open(consumable_file, "r", encoding="utf-8") as f:
+            for line in f:
+                item = line.strip()
+                if item:
+                    combined_items.append(item)
+    except FileNotFoundError:
+        pass
+
+    if not combined_items:
+        return ["（アイテムデータが見つかりません）"] * count
+
+    return random.choices(combined_items, k=count)
 
 
 def select_weapons(weapons, max_slots):
-    """スロット制限に収まるようにメイン・サブ武器を選ぶ"""
+    """新仕様（合計5〜6スロット）に収まるようにメイン・サブ武器を選ぶ"""
     if not weapons:
-        return ["（武器データがありません）", "（武器データがありません）"]
+        return None, None
 
-    w1 = random.choice(weapons)
+    available_w1 = [w for w in weapons if w["size"] <= (max_slots - 1)]
+    if not available_w1:
+        available_w1 = weapons
+
+    w1 = random.choice(available_w1)
     remaining_slots = max_slots - w1["size"]
-    available_w2 = [w for w in weapons if w["size"] <= remaining_slots]
 
+    available_w2 = [w for w in weapons if w["size"] <= remaining_slots]
     if not available_w2:
         available_w2 = [w for w in weapons if w["size"] == 1]
 
     w2 = random.choice(available_w2)
-
-    w1_name, w1_ammo = parse_ammo(w1["raw_line"])
-    w2_name, w2_ammo = parse_ammo(w2["raw_line"])
-
-    return [f"{w1_name}{w1_ammo}", f"{w2_name}{w2_ammo}"]
+    return w1, w2
 
 
 def update_gif():
@@ -127,7 +148,7 @@ def update_gif():
         if gif_index < len(gif_frames):
             image_label.config(image=gif_frames[gif_index])
             gif_index += 1
-            root.after(30, update_gif) #再生速度
+            root.after(50, update_gif)
         else:
             is_playing = False
 
@@ -135,18 +156,16 @@ def update_gif():
 def load_random_gif():
     """Data/Image フォルダ内のGIFからランダムに1つ選んでフレームを読み込む"""
     global gif_frames
-    gif_frames = []  # 前回のフレームをクリア
+    gif_frames = []
 
     image_dir = "Data/Image"
     if not os.path.exists(image_dir):
         return
 
-    # フォルダ内のすべての .gif ファイルを取得
     gif_files = glob.glob(os.path.join(image_dir, "*.gif"))
     if not gif_files:
         return
 
-    # ランダムに1つ選択
     chosen_gif = random.choice(gif_files)
 
     try:
@@ -166,47 +185,65 @@ def load_random_gif():
 def generate_text():
     """ロードアウトを生成して画面に表示する"""
     global is_playing, gif_index
-    result = []
-
-    max_slots = 5 if qm_var.get() else 4
+    
+    max_slots = 6 if qm_var.get() else 5
     weapons_list = load_weapons("Data/weapons.txt")
 
-    if not weapons_list:
-        primary, secondary = (
-            "（Data/weapons.txt が見つかりません）",
-            "（Data/weapons.txt が見つかりません）",
-        )
-    else:
-        primary, secondary = select_weapons(weapons_list, max_slots)
+    # 条件を満たすまで最大100回リトライするループ
+    for _ in range(100):
+        result_items = []
+        
+        # 1. 武器の選択
+        w1_data, w2_data = select_weapons(weapons_list, max_slots)
+        if w1_data and w2_data:
+            w1_name, w1_ammo = parse_ammo(w1_data["raw_line"])
+            w2_name, w2_ammo = parse_ammo(w2_data["raw_line"])
+            primary = f"{w1_name}{w1_ammo}"
+            secondary = f"{w2_name}{w2_ammo}"
+        else:
+            primary = "（Data/weapons.txt が見つかりません）"
+            secondary = "（Data/weapons.txt が見つかりません）"
 
-    result.append("＝＝１から（メイン武器）＝＝")
-    result.append(primary)
-    result.append("")
+        # 2. ツール＆消耗品の選択
+        if medkit_var.get():
+            result_items.append("救急キット")
+            random_items = get_integrated_items(
+                "Data/03_Tool.txt", "Data/04_Consumable.txt", 7, exclude_medkit=True
+            )
+            result_items.extend(random_items)
+        else:
+            random_items = get_integrated_items(
+                "Data/03_Tool.txt", "Data/04_Consumable.txt", 8, exclude_medkit=False
+            )
+            result_items.extend(random_items)
 
-    result.append("＝＝２から（サブ武器）＝＝")
-    result.append(secondary)
-    result.append("")
+        # 3. 近接武器必須オプションの判定（★ 統一された「近接」の文字があるかだけで判定）
+        if melee_var.get():
+            has_melee = ("近接" in primary) or ("近接" in secondary) or any("近接" in item for item in result_items)
+            if not has_melee:
+                continue  # 近接がどこにも無ければリトライ
 
-    result.append("＝＝３から（ツール）＝＝")
-    result.append("救急キット")
-    result.extend(get_random_lines("Data/03_Tool.txt", 3))
-    result.append("")
+        break
 
-    result.append("＝＝４から（消耗品）＝＝")
-    result.extend(
-        get_random_lines("Data/04_Consumable.txt", 4, allow_duplicates=True)
-    )
+    # テキスト出力用に整形
+    final_output = []
+    final_output.append("＝＝１から（メイン武器）＝＝")
+    final_output.append(primary)
+    final_output.append("")
+    final_output.append("＝＝２から（サブ武器）＝＝")
+    final_output.append(secondary)
+    final_output.append("")
+    final_output.append("＝＝３から（ツール＆消耗品 - 計８枠）＝＝")
+    final_output.extend(result_items)
 
     # 画面への描画
     text_area.config(state=tk.NORMAL)
     text_area.delete("1.0", tk.END)
-    text_area.insert(tk.END, "\n".join(result))
+    text_area.insert(tk.END, "\n".join(final_output))
     text_area.config(state=tk.DISABLED)
 
-    # ★ 生成ボタンが押されたタイミングで新しくランダムにGIFを読み込む
+    # ランダムにGIFを読み込んで再生
     load_random_gif()
-
-    # GIFアニメーションを最初から再生
     if gif_frames:
         is_playing = True
         gif_index = 0
@@ -216,8 +253,8 @@ def generate_text():
 def show_welcome_message():
     """起動時に表示する案内テキスト"""
     welcome_text = (
-        "上のチェックボックスを確認して下の生成を押してね！\n"
-        "Please check the checkbox above and click the button below to generate!\n"
+        "設定を確認して下の生成ボタンを押してね！\n"
+        "Configure settings and click the button below to generate!\n"
         "\n"
         "--------------------------------------------------\n"
         "【Hunt: Showdown Loadout Randomizer】"
@@ -231,24 +268,47 @@ def show_welcome_message():
 # --- 画面（GUI）の作成 ---
 root = tk.Tk()
 root.title("Hunt: Showdown ロードアウト抽選")
-root.geometry("520x620")
+root.geometry("540x670")
 
-qm_var = tk.BooleanVar()
+# オプション設定エリア
+options_frame = tk.Frame(root)
+options_frame.pack(pady=5)
+
+qm_var = tk.BooleanVar(value=False)
 qm_check = tk.Checkbutton(
-    root,
-    text="Quartermaster (特性あり・最大5スロット)",
+    options_frame,
+    text="Quartermaster (最大6スロット)",
     variable=qm_var,
-    font=("MS Gothic", 11, "bold"),
-    pady=5,
+    font=("MS Gothic", 10, "bold"),
 )
-qm_check.pack()
+qm_check.grid(row=0, column=0, padx=5, sticky="w")
 
+melee_var = tk.BooleanVar(value=True)
+melee_check = tk.Checkbutton(
+    options_frame,
+    text="近接装備を最低1つ確定",
+    variable=melee_var,
+    font=("MS Gothic", 10, "bold"),
+)
+melee_check.grid(row=0, column=1, padx=5, sticky="w")
+
+medkit_var = tk.BooleanVar(value=True)
+medkit_check = tk.Checkbutton(
+    options_frame,
+    text="救急キット枠を固定化",
+    variable=medkit_var,
+    font=("MS Gothic", 10, "bold"),
+)
+medkit_check.grid(row=1, column=0, columnspan=2, padx=5, sticky="w", pady=2)
+
+# メイン表示エリア
 main_frame = tk.Frame(root)
 main_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=5)
 
 text_area = tk.Text(main_frame, wrap=tk.WORD, font=("MS Gothic", 12))
 text_area.pack(expand=True, fill=tk.BOTH)
 
+# 再試行ボタン
 retry_button = tk.Button(
     root,
     text="ロードアウトを生成 / 再試行 (Generate / Retry)",
@@ -259,11 +319,10 @@ retry_button = tk.Button(
 )
 retry_button.pack(fill=tk.X, padx=10, pady=10)
 
-
-# ★ 初期状態として、まずは1個ランダムに選んで最初のコマを表示しておく
+# 初期状態のGIF読み込み
 load_random_gif()
 
-# 画像を表示するラベル（右下に絶対配置固定 ＆ 背景同化）
+# 画像を表示するラベル
 if gif_frames:
     image_label = tk.Label(root, bd=0, highlightthickness=0, bg=text_area["bg"])
     image_label.place(relx=1.0, rely=1.0, anchor="se", x=-25, y=-80)

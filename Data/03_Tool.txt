@@ -1,8 +1,8 @@
-Dusters (ナックル)
-Knife (ナイフ)
-Heavy Knife (ヘビーナイフ)
-Throwing Knives (投げナイフ)
-Throwing Axes (投げ斧)
+Dusters (ナックル)（近接）
+Knife (ナイフ)（近接）
+Heavy Knife (ヘビーナイフ)（近接）
+Throwing Knives (投げナイフ)（近接）
+Throwing Axes (投げ斧)（近接）
 Choke Bombs (チョークボム)
 Concertina Trip Mine (有刺鉄線トラップ)
 Poison Trip Mine (毒トラップ)
